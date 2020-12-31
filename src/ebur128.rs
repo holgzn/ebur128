@@ -255,6 +255,16 @@ pub(crate) fn default_channel_map(channels: u32) -> Vec<Channel> {
     }
 }
 
+/// EBU 3342 Loudness Range (LRA)
+pub struct LRA {
+    /// The loudness range in LUFS
+    pub lra: f64,
+    /// The low value in LUFS
+    pub lra_low:f64,
+    /// The high value in LUFS
+    pub lra_high: f64
+}
+
 const MAX_RATE: u32 = 2822400;
 const MAX_CHANNELS: u32 = 64;
 
@@ -796,12 +806,13 @@ impl EbuR128 {
     /// Get loudness range (LRA) of programme in LU.
     ///
     /// Calculates loudness range according to EBU 3342.
-    pub fn loudness_range(&self) -> Result<f64, Error> {
+    pub fn loudness_range(&self) -> Result<LRA, Error> {
         if !self.mode.contains(Mode::LRA) {
             return Err(Error::InvalidMode);
         }
 
-        Ok(self.short_term_block_energy_history.loudness_range())
+        let (lra, lra_low, lra_high) = self.short_term_block_energy_history.loudness_range();
+        Ok(LRA{lra, lra_low, lra_high})
     }
 
     /// Get loudness range (LRA) of programme in LU across multiple instances.
@@ -810,7 +821,7 @@ impl EbuR128 {
     // FIXME: Should maybe be IntoIterator? Maybe AsRef<Self>?
     pub fn loudness_range_multiple<'a>(
         iter: impl IntoIterator<Item = &'a Self>,
-    ) -> Result<f64, Error> {
+    ) -> Result<LRA, Error> {
         use smallvec::SmallVec;
 
         let h = iter
@@ -824,7 +835,7 @@ impl EbuR128 {
             })
             .collect::<Result<SmallVec<[_; 16]>, _>>()?;
 
-        crate::history::History::loudness_range_multiple(&*h).map_err(|_| Error::InvalidMode)
+        crate::history::History::loudness_range_multiple(&*h).map_err(|_| Error::InvalidMode).map(|(lra, lra_low, lra_high)| LRA{lra, lra_low, lra_high})
     }
 
     /// Get maximum sample peak from all frames that have been processed.
