@@ -79,7 +79,7 @@ impl Histogram {
         (above_thresh_counter, relative_threshold)
     }
 
-    fn loudness_range(h: &[u64; 1000]) -> f64 {
+    fn loudness_range(h: &[u64; 1000]) -> (f64, f64, f64) {
         let mut h_sum = [0; 1000];
         let mut size = 0;
         let mut power = 0.0;
@@ -94,7 +94,7 @@ impl Histogram {
         }
 
         if size == 0 {
-            return 0.0;
+            return (0.0, 0.0, 0.0);
         }
 
         power /= size as f64;
@@ -118,7 +118,7 @@ impl Histogram {
         };
         let size = size - before;
         if size == 0 {
-            return 0.0;
+            return (0.0, 0.0, 0.0);
         }
 
         let percentile_low = ((size - 1) as f64 * 0.1 + 0.5) as u64 + before;
@@ -148,7 +148,10 @@ impl Histogram {
         };
         let h_en = HISTOGRAM_ENERGIES[j];
 
-        energy_to_loudness(h_en) - energy_to_loudness(l_en)
+        let lra_low = energy_to_loudness(l_en);
+        let lra_high = energy_to_loudness(h_en);
+        let lra = lra_high - lra_low;
+        (lra, lra_low, lra_high)
     }
 }
 
@@ -191,9 +194,9 @@ impl Queue {
         (self.queue.len() as u64, self.queue.iter().sum::<f64>())
     }
 
-    fn loudness_range(q: &[f64]) -> f64 {
+    fn loudness_range(q: &[f64]) -> (f64, f64, f64) {
         if q.is_empty() {
-            return 0.0;
+            return (0.0, 0.0, 0.0);
         }
 
         let power = q.iter().sum::<f64>() / q.len() as f64;
@@ -208,9 +211,12 @@ impl Queue {
             let h_en = q[relgated + (relgated_size * 0.95 + 0.5) as usize];
             let l_en = q[relgated + (relgated_size * 0.1 + 0.5) as usize];
 
-            energy_to_loudness(h_en) - energy_to_loudness(l_en)
+            let lra_low = energy_to_loudness(l_en);
+            let lra_high = energy_to_loudness(h_en);
+            let lra = lra_high - lra_low;
+            (lra, lra_low, lra_high)
         } else {
-            0.0
+            (0.0, 0.0, 0.0)
         }
     }
 }
@@ -351,15 +357,15 @@ impl History {
         energy_to_loudness(relative_threshold)
     }
 
-    pub fn loudness_range(&self) -> f64 {
+    pub fn loudness_range(&self) -> (f64, f64, f64) {
         // This can only fail if multiple histories are passed
         // and have a mix of histograms and queues
         Self::loudness_range_multiple(&[self]).unwrap()
     }
 
-    pub fn loudness_range_multiple(s: &[&Self]) -> Result<f64, Error> {
+    pub fn loudness_range_multiple(s: &[&Self]) -> Result<(f64, f64, f64), Error> {
         if s.is_empty() {
-            return Ok(0.0);
+            return Ok((0.0, 0.0, 0.0));
         }
 
         match s[0] {
